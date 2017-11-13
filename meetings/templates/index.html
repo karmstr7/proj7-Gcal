@@ -91,12 +91,15 @@
             </div>
     {% endif %}
 
+    <table id="events" border='1'>
+    </table>
+
 
 </div>  <!-- container (for bootstrap) -->
 <script type="text/javascript">
     let SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
     let SELECT_URL = SCRIPT_ROOT + "/select";
-    let checked_set = new Set([]);
+    let SET_RANGE_URL = SCRIPT_ROOT + "/set_range";
 
     $(".col-md-4 :checkbox").change(
         function () {
@@ -108,6 +111,7 @@
             }
         });
 
+    let checked_set = new Set([]);
     $("#good_calendars").click(function (event) {
         event.preventDefault();
         if (checked_set.size === 0) {
@@ -121,9 +125,11 @@
         $.ajax({
             url: SELECT_URL,
             data: {calendars: JSON.stringify(set_to_list)},
-            success: function () {
-                alert("Things were sent to Flask!");
-                window.location.reload(true);
+            success: function (data) {
+                console.log(data.result);
+                for (let i = 0; i < data.result.length; i++) {
+                    $("#events").append(data.result[i]);
+                }
             }
         })
     });
@@ -133,6 +139,17 @@
         try {
             let begin_datetime = new Date($('#begin_date').val() + " " + $('#begin_time').val()).toISOString();
             let end_datetime = new Date($('#end_date').val() + " " + $('#end_time').val()).toISOString();
+            $.ajax({
+                url: SET_RANGE_URL,
+                data: {begin_datetime: begin_datetime, end_datetime: end_datetime},
+                success: function (data) {
+                    if (data.redirect) {
+                        window.location.replace(data.redirect)
+                    } else {
+                        alert("Server failed to deliver redirect url to Ajax call.")
+                    }
+                }
+            })
         }
         catch (err) {
             alert(err);

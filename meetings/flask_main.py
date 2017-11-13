@@ -258,9 +258,20 @@ def format_arrow_time(time):
 
 #################
 #
-# Handling chosen calendars
+# Ajax handlers
 #
 #################
+
+@app.route("/set_range")
+def set_range():
+    app.logger.debug("ENTERING SET_RANGE")
+    begin_datetime = request.args.get('begin_datetime')
+    end_datetime = request.args.get('end_datetime')
+    app.logger.debug("begin_datetime: {}, end_datetime: {}".format(begin_datetime, end_datetime))
+    flask.session['begin_datetime'] = begin_datetime
+    flask.session['end_datetime'] = end_datetime
+    return flask.jsonify(redirect="/choose")
+
 
 @app.route("/select")
 def select():
@@ -271,9 +282,9 @@ def select():
         app.logger.debug("Redirecting to authorization")
         return flask.redirect(flask.url_for('oauth2callback'))
     gcal_service = get_gcal_service(credentials)
-    get_events(calendars, gcal_service)
-    results = []    # Put events in here
-    return flask.jsonify(result=results)
+    got_events = get_events(calendars, gcal_service)
+    app.logger.debug(got_events)
+    return flask.jsonify(result=got_events)
 
 
 #################
@@ -288,8 +299,18 @@ def get_events(calendars, service):
     calendars = ast.literal_eval(calendars)
     for calendar in calendars:
         calendar = ast.literal_eval(calendar)
-        event_list.append(service.events().list(calendarId=calendar['id']).execute()['items'])
-    pass
+        calendar_events = service.events().list(calendarId=calendar['id']).execute()['items']
+        for calendar_event in calendar_events:
+            if 'transparency' in calendar_event and calendar_event['transparency'] is "transparent":
+                continue
+            event_list.append(({"calendar": calendar['id']},
+                               {"summary": calendar_event['summary']},
+                               {"id": calendar_event['id']},
+                               {"start": calendar_event['start']},
+                               {"etag": calendar_event['etag']},
+                               {"status": calendar_event['status']},
+                               {"end": calendar_event['end']}))
+    return event_list
 
 
 if __name__ == "__main__":
