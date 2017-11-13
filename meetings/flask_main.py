@@ -4,6 +4,7 @@ from flask import request
 from flask import url_for
 import uuid
 
+import ast
 import json
 import logging
 
@@ -49,9 +50,6 @@ APPLICATION_NAME = 'MeetMe class project'
 @app.route("/")
 @app.route("/index")
 def index():
-    app.logger.debug("Entering index")
-    if 'begin_date' not in flask.session:
-        init_session_values()
     return render_template('index.html')
 
 
@@ -179,117 +177,6 @@ def oauth2callback():
         app.logger.debug("Got credentials")
         return flask.redirect(flask.url_for('choose'))
 
-
-#####
-#
-#  Option setting:  Buttons or forms that add some
-#     information into session state.  Don't do the
-#     computation here; use of the information might
-#     depend on what other information we have.
-#   Setting an option sends us back to the main display
-#      page, where we may put the new information to use. 
-#
-#####
-
-
-@app.route('/setrange', methods=['POST'])
-def setrange():
-    """
-    User chose a date range with the bootstrap daterange
-    widget.
-    """
-    app.logger.debug("Entering setrange")
-    flask.flash("Setrange gave us '{}'".format(
-        request.form.get('daterange')))
-    daterange = request.form.get('daterange')
-    flask.session['daterange'] = daterange
-    daterange_parts = daterange.split()
-    flask.session['begin_date'] = interpret_date(daterange_parts[0])
-    flask.session['end_date'] = interpret_date(daterange_parts[2])
-    app.logger.debug("Setrange parsed {} - {}  dates as {} - {}".format(
-        daterange_parts[0], daterange_parts[1],
-        flask.session['begin_date'], flask.session['end_date']))
-    return flask.redirect(flask.url_for("choose"))
-
-
-####
-#
-#   Initialize session variables 
-#
-####
-
-
-def init_session_values():
-    """
-    Start with some reasonable defaults for date and time ranges.
-    Note this must be run in app context ... can't call from main. 
-    """
-    # Default date span = tomorrow to 1 week from now
-    now = arrow.now('local')  # We really should be using tz from browser
-    tomorrow = now.replace(days=+1)
-    nextweek = now.replace(days=+7)
-    flask.session["begin_date"] = tomorrow.floor('day').isoformat()
-    flask.session["end_date"] = nextweek.ceil('day').isoformat()
-    flask.session["daterange"] = "{} - {}".format(
-        tomorrow.format("MM/DD/YYYY"),
-        nextweek.format("MM/DD/YYYY"))
-    # Default time span each day, 8 to 5
-    flask.session["begin_time"] = interpret_time("9am")
-    flask.session["end_time"] = interpret_time("5pm")
-
-
-def interpret_time(text):
-    """
-    Read time in a human-compatible format and
-    interpret as ISO format with local timezone.
-    May throw exception if time can't be interpreted. In that
-    case it will also flash a message explaining accepted formats.
-    """
-    app.logger.debug("Decoding time '{}'".format(text))
-    time_formats = ["ha", "h:mma", "h:mm a", "H:mm"]
-    try:
-        as_arrow = arrow.get(text, time_formats).replace(tzinfo=tz.tzlocal())
-        as_arrow = as_arrow.replace(year=2016)  # HACK see below
-        app.logger.debug("Succeeded interpreting time")
-    except:
-        app.logger.debug("Failed to interpret time")
-        flask.flash("Time '{}' didn't match accepted formats 13:30 or 1:30pm"
-                    .format(text))
-        raise
-    return as_arrow.isoformat()
-    # HACK #Workaround
-    # isoformat() on raspberry Pi does not work for some dates
-    # far from now.  It will fail with an overflow from time stamp out
-    # of range while checking for daylight savings time.  Workaround is
-    # to force the date-time combination into the year 2016, which seems to
-    # get the timestamp into a reasonable range. This workaround should be
-    # removed when Arrow or Dateutil.tz is fixed.
-    # FIXME: Remove the workaround when arrow is fixed (but only after testing
-    # on raspberry Pi --- failure is likely due to 32-bit integers on that platform)
-
-
-def interpret_date(text):
-    """
-    Convert text of date to ISO format used internally,
-    with the local time zone.
-    """
-    try:
-        as_arrow = arrow.get(text, "MM/DD/YYYY").replace(
-            tzinfo=tz.tzlocal())
-    except:
-        flask.flash("Date '{}' didn't fit expected format 12/31/2001")
-        raise
-    return as_arrow.isoformat()
-
-
-def next_day(isotext):
-    """
-    ISO date + 1 day (used in query to Google calendar)
-    """
-    as_arrow = arrow.get(isotext)
-    return as_arrow.replace(days=+1).isoformat()
-
-
 ####
 #
 #  Functions (NOT pages) that return some information
@@ -369,7 +256,40 @@ def format_arrow_time(time):
         return "(bad time)"
 
 
-#############
+#################
+#
+# Handling chosen calendars
+#
+#################
+
+@app.route("/select")
+def select():
+    app.logger.debug("ENTERING SELECT")
+    calendars = request.args.get('calendars', type=str)
+    credentials = valid_credentials()
+    if not credentials:
+        app.logger.debug("Redirecting to authorization")
+        return flask.redirect(flask.url_for('oauth2callback'))
+    gcal_service = get_gcal_service(credentials)
+    get_events(calendars, gcal_service)
+    results = []    # Put events in here
+    return flask.jsonify(result=results)
+
+
+#################
+#
+# Get events from calendars
+#
+#################
+
+def get_events(calendars, service):
+    app.logger.debug("Entering get_events")
+    event_list = []
+    calendars = ast.literal_eval(calendars)
+    for calendar in calendars:
+        calendar = ast.literal_eval(calendar)
+        event_list.append(service.events().list(calendarId=calendar['id']).execute()['items'])
+    pass
 
 
 if __name__ == "__main__":
