@@ -41,18 +41,23 @@
       -- they appear above the rest of the content, just until the next
       -- action.
       -->
-    {% if session.begin_date %}
-            <p>{{ session.begin_datetime }} to {{ session.end_datetime }}</p>
+    {%  if session.begin_datetime is defined %}
+        <input type="text" name="session_begin_datetime" id="session_begin_datetime"
+               value="{{ session.begin_datetime }}" style="width: 50%; display: block;" readonly>
     {% endif %}
-{#    {% with messages = get_flashed_messages() %}#}
-{#        {% if messages %}#}
-{#            <ul class=flashes>#}
-{#                {% for message in messages %}#}
-{#                    <li>{{ message }}</li>#}
-{#                {% endfor %}#}
-{#            </ul>#}
-{#        {% endif %}#}
-{#    {% endwith %}#}
+    {% if session.end_datetime is defined %}
+        <input type="text" name="session_end_datetime" id="session_end_datetime"
+               value="{{ session.end_datetime }}" style="width: 50%; display: block;" readonly>
+    {% endif %}
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class=flashes>
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
 
     <h2>Date and Time Range</h2>
     <div class="container">
@@ -140,7 +145,6 @@
                     $tr2.append(
                         $('<td>').text(array[1])
                     );
-                    console.log(array[2]);
                     let date1 = new Date(array[2]);
                     $tr3.append(
                         $('<td>').text(date1.toString())
@@ -182,6 +186,18 @@
             alert(err);
         }
     })
+
+    if ($('#session_begin_datetime').length) {
+        $val = $('#session_begin_datetime').val();
+        let local = new Date($val);
+        $('#session_begin_datetime').val(local);
+    }
+
+    if ($('#session_end_datetime').length) {
+        $val = $('#session_end_datetime').val();
+        let local = new Date($val);
+        $('#session_end_datetime').val(local);
+    }
 </script>
 </body>
 </html>
