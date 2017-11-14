@@ -41,28 +41,30 @@
       -- they appear above the rest of the content, just until the next
       -- action.
       -->
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul class=flashes>
-                {% for message in messages %}
-                    <li>{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    {% endwith %}
+    {% if session.begin_date %}
+            <p>{{ session.begin_datetime }} to {{ session.end_datetime }}</p>
+    {% endif %}
+{#    {% with messages = get_flashed_messages() %}#}
+{#        {% if messages %}#}
+{#            <ul class=flashes>#}
+{#                {% for message in messages %}#}
+{#                    <li>{{ message }}</li>#}
+{#                {% endfor %}#}
+{#            </ul>#}
+{#        {% endif %}#}
+{#    {% endwith %}#}
 
     <h2>Date and Time Range</h2>
     <div class="container">
         <div class="col-md-6">
             <label>Begins at</label>
-            <input type=date name="begin_date" id="begin_date" value="2017-01-01"/>
-            <input type=time name="begin_time" id="begin_time" value="00:00"/>
+            <input type=date name="begin_date" id="begin_date" value="2017-09-01"/>
+            <input type=time name="begin_time" id="begin_time" value="08:00"/>
         </div>
         <div class="col-md-6">
             <label>Ends at</label>
-            <input type=date name="end_date" id="end_date" value="2017-01-02"/>
-            <input type=time name="end_time" id="end_time" value="00:00"/>
+            <input type=date name="end_date" id="end_date" value="2017-11-01"/>
+            <input type=time name="end_time" id="end_time" value="13:00"/>
         </div>
         <button type="submit" id="datetimes_button">Confirm the Datetimes</button>
     </div>
@@ -91,8 +93,8 @@
             </div>
     {% endif %}
 
-    <table id="events" border='1'>
-    </table>
+    <div id="events">
+    </div>
 
 
 </div>  <!-- container (for bootstrap) -->
@@ -104,7 +106,6 @@
     $(".col-md-4 :checkbox").change(
         function () {
             if (this.checked) {
-                console.log("Checked value: " + $(this).val());
                 checked_set.add($(this).val());
             } else {
                 checked_set.delete($(this).val());
@@ -121,15 +122,41 @@
         for (let it = checked_set.values(), val = null; val = it.next().value;) {
             set_to_list.push(val);
         }
-        console.log(set_to_list);
         $.ajax({
             url: SELECT_URL,
             data: {calendars: JSON.stringify(set_to_list)},
             success: function (data) {
-                console.log(data.result);
-                for (let i = 0; i < data.result.length; i++) {
-                    $("#events").append(data.result[i]);
-                }
+                let $table = $('<table>');
+                let $tr1 = $('<tr>');
+                let $tr2 = $('<tr>');
+                let $tr3 = $('<tr>');
+                let $tr4 = $('<tr>');
+                $.each(data.result, function (i, array) {
+                    let $th = $('<th>');
+                    let $td = $('<td>');
+                    $tr1.append(
+                        $('<th>').text(array[0])
+                    );
+                    $tr2.append(
+                        $('<td>').text(array[1])
+                    );
+                    console.log(array[2]);
+                    let date1 = new Date(array[2]);
+                    $tr3.append(
+                        $('<td>').text(date1.toString())
+                    );
+                    let date2 = new Date(array[3]);
+                    $tr4.append(
+                        $('<td>').text(date2.toString())
+                    );
+                });
+                $table.append(
+                    $tr1,
+                    $tr2,
+                    $tr3,
+                    $tr4
+                );
+                $("#events").append($table);
             }
         })
     });

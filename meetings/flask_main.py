@@ -1,17 +1,15 @@
 import flask
 from flask import render_template
 from flask import request
-from flask import url_for
-import uuid
 
+from calc_busy import get_busy_events
+from _functools import reduce
 import ast
-import json
 import logging
 
 # Date handling 
 import arrow  # Replacement for datetime, based on moment.js
 # import datetime # But we still need time
-from dateutil import tz  # For interpreting local times
 
 # OAuth2  - Google library implementation for convenience
 from oauth2client import client
@@ -234,36 +232,16 @@ def cal_sort_key(cal):
 
 #################
 #
-# Functions used within the templates
-#
-#################
-
-@app.template_filter('fmtdate')
-def format_arrow_date(date):
-    try:
-        normal = arrow.get(date)
-        return normal.format("ddd MM/DD/YYYY")
-    except:
-        return "(bad date)"
-
-
-@app.template_filter('fmttime')
-def format_arrow_time(time):
-    try:
-        normal = arrow.get(time)
-        return normal.format("HH:mm")
-    except:
-        return "(bad time)"
-
-
-#################
-#
 # Ajax handlers
 #
 #################
 
 @app.route("/set_range")
 def set_range():
+    """
+    Set the chosen begin datetime and end datetime to their session cookies.
+    :return: JSON-ed url path of /choose
+    """
     app.logger.debug("ENTERING SET_RANGE")
     begin_datetime = request.args.get('begin_datetime')
     end_datetime = request.args.get('end_datetime')
@@ -275,6 +253,10 @@ def set_range():
 
 @app.route("/select")
 def select():
+    """
+    Does things with the selected calendars.
+    :return: A list of events impeding with the meeting time.
+    """
     app.logger.debug("ENTERING SELECT")
     calendars = request.args.get('calendars', type=str)
     credentials = valid_credentials()
@@ -283,34 +265,64 @@ def select():
         return flask.redirect(flask.url_for('oauth2callback'))
     gcal_service = get_gcal_service(credentials)
     got_events = get_events(calendars, gcal_service)
-    app.logger.debug(got_events)
-    return flask.jsonify(result=got_events)
+    cal_busy = get_busy_events(got_events, flask.session['begin_datetime'], flask.session['end_datetime'])
+    return flask.jsonify(result=cal_busy)
 
 
 #################
 #
-# Get events from calendars
+# Get events from calendars and other event processing.
 #
 #################
 
 def get_events(calendars, service):
+    """
+    Gets events from the chosen calendars.
+    Converts all instances of ISO-8601 time strings from local to UTC.
+    :param calendars:   A list of calendars
+    :param service:     A service object, need this to grab events from the calendars.
+    :return: A list of tuples containing useful information about the calendars' events.
+    """
     app.logger.debug("Entering get_events")
     event_list = []
     calendars = ast.literal_eval(calendars)
     for calendar in calendars:
         calendar = ast.literal_eval(calendar)
-        calendar_events = service.events().list(calendarId=calendar['id']).execute()['items']
+        calendar_events = service.events().list(calendarId=calendar['id'], singleEvents=True).execute()['items']
         for calendar_event in calendar_events:
             if 'transparency' in calendar_event and calendar_event['transparency'] is "transparent":
                 continue
             event_list.append(({"calendar": calendar['id']},
                                {"summary": calendar_event['summary']},
-                               {"id": calendar_event['id']},
                                {"start": calendar_event['start']},
-                               {"etag": calendar_event['etag']},
-                               {"status": calendar_event['status']},
-                               {"end": calendar_event['end']}))
+                               {"end": calendar_event['end']},
+                               {"recurrence": reduce(lambda d, key: d.get(key) if d else None,
+                                                     ['recurrence'],
+                                                     calendar_event)}))
+    for event in event_list:
+        for attribute in event:
+            if 'start' in attribute:
+                try:
+                    attribute['start']['dateTime'] = convert_to_utc(attribute['start']['dateTime'])
+                    attribute['start']['timeZone'] = 'UTC'
+                except KeyError:
+                    continue
+            if 'end' in attribute:
+                try:
+                    attribute['end']['dateTime'] = convert_to_utc(attribute['end']['dateTime'])
+                    attribute['end']['timeZone'] = 'UTC'
+                except KeyError:
+                    continue
     return event_list
+
+
+def convert_to_utc(tz_time):
+    """
+    :param tz_time: A dictionary object containing the start or end time of the event,
+                    the time is an ISO string with timezone attached.
+    :return:    An ISO-8601 string of time in UTC.
+    """
+    return str(arrow.get(tz_time).to('UTC'))
 
 
 if __name__ == "__main__":

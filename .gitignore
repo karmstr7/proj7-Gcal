@@ -4,6 +4,7 @@ client_secret.json
 node_modules
 static/js/*.min.js
 credentials.ini
+google.client.key.json
 .goog_app_key.json
 *~
 .DS_Store
@@ -65,4 +66,4 @@ docs/_build/
 
 # PyBuilder
 target/
-/meetings/client_id.json
+/proj7-Gcal/meetings/google_client_key.json
